@@ -17,8 +17,9 @@ const FRUIT_TYPES = [
 const game = {
   canvas: null,
   ctx: null,
-  width: 0,
-  height: 0,
+  width: 0,      // Canvas CSS pixel width (logical)
+  height: 0,     // Canvas CSS pixel height (logical)
+  dpr: 1,
   fruits: [],
   score: 0,
   highScore: parseInt(localStorage.getItem('mergeMasterHigh') || '0'),
@@ -26,225 +27,217 @@ const game = {
   currentType: 0,
   gameOver: false,
   canDrop: true,
-  dropX: 0,
-  previewFruit: null,
   totalMerges: 0,
   frameId: null,
 };
 
-function initGame() {
-  const canvas = document.getElementById('gameCanvas');
-  const rect = canvas.parentElement.getBoundingClientRect();
-  const size = Math.min(rect.width - 4, 400);
+let particles = [];
+let lastTime = 0;
 
-  // Use 2x DPR for sharp rendering
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = size * dpr;
-  canvas.height = size * 1.4 * dpr;
-  canvas.style.width = size + 'px';
-  canvas.style.height = (size * 1.4) + 'px';
-
-  game.canvas = canvas;
-  game.ctx = canvas.getContext('2d');
-  game.width = canvas.width;
-  game.height = canvas.height;
-  game.dpr = dpr;
-  game.scale = size / 360; // Base design scale
-
-  // Reset state
-  game.fruits = [];
-  game.score = 0;
-  game.gameOver = false;
-  game.canDrop = true;
-  game.totalMerges = 0;
-  game.currentType = randInt(0, Math.min(4, FRUIT_TYPES.length - 1));
-  game.nextType = randInt(0, Math.min(4, FRUIT_TYPES.length - 1));
-
-  updateScore();
-  canvas.addEventListener('click', onCanvasClick);
-  canvas.addEventListener('touchstart', onCanvasTouch);
-
-  // Render loop
-  if (game.frameId) cancelAnimationFrame(game.frameId);
-  gameLoop();
-}
+// ====== Helpers ======
 
 function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-// Physics constants
-const GRAVITY = 2000; // pixels/s²
-const RESTITUTION = 0.3;
-const FRICTION = 0.99;
-const WALL_INSET = 30 * 0.5; // inset from canvas edge
+function lightenColor(hex, percent) {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = Math.min(255, (num >> 16) + percent);
+  const g = Math.min(255, ((num >> 8) & 0xff) + percent);
+  const b = Math.min(255, (num & 0xff) + percent);
+  return `rgb(${r},${g},${b})`;
+}
 
-function createFruit(type, x, y) {
+// ====== Init ======
+
+function initGame() {
+  const canvas = document.getElementById('gameCanvas');
+  const parentRect = canvas.parentElement.getBoundingClientRect();
+  const logicalWidth = Math.min(parentRect.width - 4, 400);
+
+  const dpr = window.devicePixelRatio || 1;
+  const logicalHeight = logicalWidth * 1.4;
+
+  canvas.width = logicalWidth * dpr;
+  canvas.height = logicalHeight * dpr;
+  canvas.style.width = logicalWidth + 'px';
+  canvas.style.height = logicalHeight + 'px';
+
+  Object.assign(game, {
+    canvas,
+    ctx: canvas.getContext('2d'),
+    width: logicalWidth,
+    height: logicalHeight,
+    dpr,
+    fruits: [],
+    score: 0,
+    gameOver: false,
+    canDrop: true,
+    totalMerges: 0,
+    currentType: randInt(0, 4),
+    nextType: randInt(0, 4),
+  });
+
+  lastTime = 0;
+  particles = [];
+
+  updateScore();
+  updatePreview();
+
+  if (game.frameId) cancelAnimationFrame(game.frameId);
+
+  // Re-bind events (replace old handlers)
+  canvas.onclick = onCanvasClick;
+  canvas.ontouchstart = onCanvasTouch;
+
+  gameLoop(performance.now());
+}
+
+// ====== Input ======
+
+function getClickRatio(clientX) {
+  const rect = game.canvas.getBoundingClientRect();
+  return (clientX - rect.left) / rect.width; // 0..1
+}
+
+function addFruit(type, ratio) {
+  // ratio: 0..1 across the CSS width
+  // Convert to logical CSS pixel position, then createFruit will multiply by dpr
+  const cssX = ratio * game.width;
+
   const config = FRUIT_TYPES[type];
   const s = game.dpr;
-  return {
+  const f = {
     type,
-    x: x * s,
-    y: y * s,
+    x: cssX * s,
+    y: 60 * s,
     vx: 0,
-    vy: 0,
+    vy: 100 * s,
     radius: config.radius * s,
     mass: config.radius * config.radius,
     settled: false,
     settleTimer: 0,
   };
-}
-
-function addFruit(type, x) {
-  const f = createFruit(type, x, 60 * game.dpr);
-  f.vy = 100 * game.dpr;
   game.fruits.push(f);
   game.canDrop = false;
-
-  // Allow next drop after fruit settles
   setTimeout(() => { game.canDrop = true; }, 300);
+
+  game.currentType = game.nextType;
+  game.nextType = randInt(0, 4);
+  updatePreview();
 }
 
 function onCanvasClick(e) {
   if (game.gameOver || !game.canDrop) return;
-  const rect = game.canvas.getBoundingClientRect();
-  const x = (e.clientX - rect.left) / rect.width;
-  addFruit(game.currentType, x);
-
-  game.currentType = game.nextType;
-  game.nextType = randInt(0, Math.min(4, FRUIT_TYPES.length - 1));
-  updatePreview();
+  addFruit(game.currentType, getClickRatio(e.clientX));
 }
 
 function onCanvasTouch(e) {
   e.preventDefault();
-  const touch = e.touches[0];
-  const rect = game.canvas.getBoundingClientRect();
-  const x = (touch.clientX - rect.left) / rect.width;
   if (game.gameOver || !game.canDrop) return;
-  addFruit(game.currentType, x);
-
-  game.currentType = game.nextType;
-  game.nextType = randInt(0, Math.min(4, FRUIT_TYPES.length - 1));
-  updatePreview();
+  addFruit(game.currentType, getClickRatio(e.touches[0].clientX));
 }
 
+// ====== UI updates ======
+
 function updatePreview() {
-  const preview = document.getElementById('next-preview');
-  if (preview) preview.textContent = FRUIT_TYPES[game.nextType].emoji;
+  const el = document.getElementById('next-preview');
+  if (el) el.textContent = FRUIT_TYPES[game.nextType].emoji;
 }
 
 function updateScore() {
   document.getElementById('score-value').textContent = game.score;
 }
 
-function mergeFruits(a, b) {
-  if (a.type >= FRUIT_TYPES.length - 1) {
-    // Already max type - just remove both, bonus points
-    game.score += FRUIT_TYPES[a.type].score * 2;
-    removeFruit(a);
-    removeFruit(b);
-    return;
-  }
-
-  const newType = a.type + 1;
-  const newX = (a.x + b.x) / 2 / game.dpr;
-  const newY = (a.y + b.y) / 2 / game.dpr;
-
-  // Remove old
-  removeFruit(a);
-  removeFruit(b);
-
-  // Create merged
-  const f = createFruit(newType, newX, newY);
-  f.vy = -100 * game.dpr; // pop up slightly
-  f.vx = (Math.random() - 0.5) * 50 * game.dpr;
-  game.fruits.push(f);
-
-  // Score
-  game.score += FRUIT_TYPES[newType].score;
-  game.totalMerges++;
-  updateScore();
-
-  // Particle effect
-  createMergeEffect(newX, newY, newType);
-}
+// ====== Merge logic ======
 
 function removeFruit(fruit) {
   const idx = game.fruits.indexOf(fruit);
   if (idx > -1) game.fruits.splice(idx, 1);
 }
 
-// Simple particle effects
-let particles = [];
+function mergeFruits(a, b) {
+  if (a.type >= FRUIT_TYPES.length - 1) {
+    game.score += FRUIT_TYPES[a.type].score * 2;
+    removeFruit(a);
+    removeFruit(b);
+    updateScore();
+    return;
+  }
 
-function createMergeEffect(x, y, type) {
-  const config = FRUIT_TYPES[type];
+  const newType = a.type + 1;
+  const nx = (a.x + b.x) / 2;
+  const ny = (a.y + b.y) / 2;
+
+  removeFruit(a);
+  removeFruit(b);
+
+  const config = FRUIT_TYPES[newType];
   const s = game.dpr;
+  const f = {
+    type: newType,
+    x: nx,
+    y: ny,
+    vx: (Math.random() - 0.5) * 50 * s,
+    vy: -100 * s,
+    radius: config.radius * s,
+    mass: config.radius * config.radius,
+    settled: false,
+    settleTimer: 0,
+  };
+  game.fruits.push(f);
+
+  game.score += FRUIT_TYPES[newType].score;
+  game.totalMerges++;
+  updateScore();
+
+  // Particles
+  const color = FRUIT_TYPES[newType].color;
   for (let i = 0; i < 8; i++) {
     const angle = (Math.PI * 2 * i) / 8;
     particles.push({
-      x: x * s,
-      y: y * s,
+      x: nx, y: ny,
       vx: Math.cos(angle) * 100 * s,
       vy: Math.sin(angle) * 100 * s - 80 * s,
       radius: 4 * s,
       life: 1,
-      color: config.color,
+      color,
     });
   }
 }
 
-function checkMerge(fruit) {
-  for (let i = 0; i < game.fruits.length; i++) {
-    const other = game.fruits[i];
-    if (fruit === other) continue;
-    if (fruit.type !== other.type) continue;
+// ====== Physics ======
 
-    const dx = fruit.x - other.x;
-    const dy = fruit.y - other.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-
-    if (dist < (fruit.radius + other.radius) * 0.7) {
-      mergeFruits(fruit, other);
-      return true;
-    }
-  }
-  return false;
-}
+const GRAVITY = 2000;
+const RESTITUTION = 0.3;
+const FRICTION = 0.99;
 
 function physicsStep(dt) {
-  const W = game.width;
-  const H = game.height;
   const s = game.dpr;
-  const inset = 15 * s;
-  const leftWall = inset;
-  const rightWall = W - inset;
-  const ground = H - 20 * s;
+  const leftWall = 15 * s;
+  const rightWall = game.width * s - 15 * s;
+  const ground = game.height * s - 20 * s;
+  const dangerY = 120 * s;
 
+  // --- Move & wall collisions ---
   for (const f of game.fruits) {
     if (f.settled) continue;
 
-    // Gravity
-    f.vy += GRAVITY * dt * s;
-
-    // Apply velocity
+    f.vy += GRAVITY * s * dt;
     f.x += f.vx * dt;
     f.y += f.vy * dt;
-
-    // Friction
     f.vx *= FRICTION;
 
-    // Wall collisions
+    // Left wall
     if (f.x - f.radius < leftWall) {
       f.x = leftWall + f.radius;
       f.vx = -f.vx * RESTITUTION;
     }
+    // Right wall
     if (f.x + f.radius > rightWall) {
       f.x = rightWall - f.radius;
       f.vx = -f.vx * RESTITUTION;
     }
-
     // Ground
     if (f.y + f.radius > ground) {
       f.y = ground - f.radius;
@@ -257,8 +250,7 @@ function physicsStep(dt) {
     }
   }
 
-  // Fruit-fruit collisions
-  const pairsChecked = new Set();
+  // --- Fruit-fruit collisions ---
   for (let i = 0; i < game.fruits.length; i++) {
     for (let j = i + 1; j < game.fruits.length; j++) {
       const a = game.fruits[i];
@@ -268,53 +260,60 @@ function physicsStep(dt) {
       const dist = Math.sqrt(dx * dx + dy * dy);
       const minDist = a.radius + b.radius;
 
-      if (dist < minDist && dist > 0) {
-        // Collision response
-        const nx = dx / dist;
-        const ny = dy / dist;
-        const overlap = minDist - dist;
-        const totalMass = a.mass + b.mass;
+      if (dist >= minDist || dist === 0) continue;
 
-        a.x += nx * overlap * (b.mass / totalMass);
-        a.y += ny * overlap * (b.mass / totalMass);
-        b.x -= nx * overlap * (a.mass / totalMass);
-        b.y -= ny * overlap * (a.mass / totalMass);
+      const nx = dx / dist;
+      const ny = dy / dist;
+      const overlap = minDist - dist;
+      const totalMass = a.mass + b.mass;
 
-        // Velocity response
-        const relVx = a.vx - b.vx;
-        const relVy = a.vy - b.vy;
-        const relVn = relVx * nx + relVy * ny;
+      // Position correction
+      const ratioA = b.mass / totalMass;
+      const ratioB = a.mass / totalMass;
+      a.x += nx * overlap * ratioA;
+      a.y += ny * overlap * ratioA;
+      b.x -= nx * overlap * ratioB;
+      b.y -= ny * overlap * ratioB;
 
-        if (relVn < 0) {
-          const impulse = -(1 + RESTITUTION) * relVn / totalMass;
-          a.vx += impulse * b.mass * nx;
-          a.vy += impulse * b.mass * ny;
-          b.vx -= impulse * a.mass * nx;
-          b.vy -= impulse * a.mass * ny;
-        }
-
-        // Reset settle timer
-        a.settleTimer = 0;
-        b.settleTimer = 0;
-        a.settled = false;
-        b.settled = false;
+      // Velocity response
+      const relVn = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
+      if (relVn < 0) {
+        const impulse = -(1 + RESTITUTION) * relVn / totalMass;
+        a.vx += impulse * b.mass * nx;
+        a.vy += impulse * b.mass * ny;
+        b.vx -= impulse * a.mass * nx;
+        b.vy -= impulse * a.mass * ny;
       }
+
+      a.settleTimer = b.settleTimer = 0;
+      a.settled = b.settled = false;
     }
   }
 
-  // Check merges (iterate carefully since array changes)
-  for (let i = game.fruits.length - 1; i >= 0; i--) {
-    const f = game.fruits[i];
-    if (f && checkMerge(f)) {
-      // Restart merge check since array changed
-      break;
+  // --- Merge checks (repeat until no more merges in this frame) ---
+  let merged;
+  do {
+    merged = false;
+    for (let i = 0; i < game.fruits.length; i++) {
+      for (let j = i + 1; j < game.fruits.length; j++) {
+        const a = game.fruits[i];
+        const b = game.fruits[j];
+        if (a.type !== b.type) continue;
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        if (Math.sqrt(dx * dx + dy * dy) < (a.radius + b.radius) * 0.7) {
+          mergeFruits(a, b);
+          merged = true;
+          break; // restart j loop
+        }
+      }
+      if (merged) break; // restart i loop
     }
-  }
+  } while (merged);
 
-  // Game over check
-  const dangerLine = 120 * s;
+  // --- Game over check ---
   for (const f of game.fruits) {
-    if (f.y - f.radius < dangerLine && f.settled) {
+    if (f.settled && f.y - f.radius < dangerY) {
       gameOver();
       return;
     }
@@ -335,16 +334,13 @@ function gameOver() {
     game.totalMerges > 20 ? '🎉 太厉害了！' : '😅 游戏结束';
 }
 
-// Rendering
-let lastTime = 0;
+// ====== Rendering ======
 
 function gameLoop(timestamp) {
   const dt = lastTime ? Math.min((timestamp - lastTime) / 1000, 0.05) : 0.016;
   lastTime = timestamp;
 
-  if (!game.gameOver) {
-    physicsStep(dt);
-  }
+  if (!game.gameOver) physicsStep(dt);
 
   // Update particles
   for (let i = particles.length - 1; i >= 0; i--) {
@@ -352,7 +348,7 @@ function gameLoop(timestamp) {
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.vy += 500 * game.dpr * dt;
-    p.life -= dt * 2;
+    p.life -= dt * 3;
     if (p.life <= 0) particles.splice(i, 1);
   }
 
@@ -361,30 +357,29 @@ function gameLoop(timestamp) {
 }
 
 function render() {
-  const ctx = game.ctx;
-  const W = game.width;
-  const H = game.height;
-  const s = game.dpr;
+  const { ctx, width, height, dpr: s } = game;
+  const W = width * s;
+  const H = height * s;
 
   // Clear
   ctx.clearRect(0, 0, W, H);
 
-  // Background
-  const gradient = ctx.createLinearGradient(0, 0, 0, H);
-  gradient.addColorStop(0, '#0f0c29');
-  gradient.addColorStop(0.5, '#302b63');
-  gradient.addColorStop(1, '#24243e');
-  ctx.fillStyle = gradient;
+  // Background gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0f0c29');
+  grad.addColorStop(0.5, '#302b63');
+  grad.addColorStop(1, '#24243e');
+  ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 
-  // Draw bucket (container area)
+  // Bucket outline
   const inset = 15 * s;
   ctx.strokeStyle = 'rgba(255,255,255,0.15)';
   ctx.lineWidth = 2 * s;
   ctx.strokeRect(inset, 40 * s, W - inset * 2, H - 60 * s);
 
   // Danger line
-  ctx.strokeStyle = 'rgba(231, 76, 60, 0.4)';
+  ctx.strokeStyle = 'rgba(231,76,60,0.4)';
   ctx.setLineDash([8 * s, 8 * s]);
   ctx.beginPath();
   ctx.moveTo(inset, 120 * s);
@@ -392,20 +387,20 @@ function render() {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Current fruit indicator (show at top)
+  // Current fruit indicator
   if (!game.gameOver && game.canDrop) {
     ctx.save();
     ctx.globalAlpha = 0.6;
-    drawFruit(ctx, game.width / 2, 55 * s, game.currentType, 0.7);
+    drawFruit(ctx, W / 2, 55 * s, game.currentType, 0.7);
     ctx.restore();
   }
 
-  // Draw fruits
+  // All fruits
   for (const f of game.fruits) {
     drawFruit(ctx, f.x, f.y, f.type, 1);
   }
 
-  // Draw particles
+  // Particles
   for (const p of particles) {
     ctx.globalAlpha = p.life;
     ctx.fillStyle = p.color;
@@ -416,7 +411,7 @@ function render() {
   ctx.globalAlpha = 1;
 
   // Stats
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
   ctx.font = `${14 * s}px sans-serif`;
   ctx.textAlign = 'right';
   ctx.fillText(`合成 ${game.totalMerges} 次`, W - 10 * s, H - 5 * s);
@@ -424,7 +419,7 @@ function render() {
 
 function drawFruit(ctx, x, y, type, alpha) {
   const config = FRUIT_TYPES[type];
-  const radius = config.radius * (game.dpr || 1);
+  const radius = config.radius * game.dpr;
 
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -433,7 +428,7 @@ function drawFruit(ctx, x, y, type, alpha) {
   ctx.shadowColor = 'rgba(0,0,0,0.3)';
   ctx.shadowBlur = radius * 0.3;
 
-  // Circle
+  // Circle with radial gradient
   const grad = ctx.createRadialGradient(
     x - radius * 0.3, y - radius * 0.3, radius * 0.1,
     x, y, radius
@@ -448,24 +443,16 @@ function drawFruit(ctx, x, y, type, alpha) {
   ctx.shadowBlur = 0;
 
   // Emoji
-  const fontSize = radius * 1.1;
-  ctx.font = `${fontSize}px sans-serif`;
+  ctx.font = `${radius * 1.1}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(config.emoji, x, y + 2 * (game.dpr || 1));
+  ctx.fillText(config.emoji, x, y + 2 * game.dpr);
 
   ctx.restore();
 }
 
-function lightenColor(hex, percent) {
-  const num = parseInt(hex.replace('#', ''), 16);
-  const r = Math.min(255, (num >> 16) + percent);
-  const g = Math.min(255, ((num >> 8) & 0x00FF) + percent);
-  const b = Math.min(255, (num & 0x0000FF) + percent);
-  return `rgb(${r},${g},${b})`;
-}
+// ====== Event wiring ======
 
-// Event handlers
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnRestart').addEventListener('click', restartGame);
   document.getElementById('btnRules').addEventListener('click', () => {
@@ -488,7 +475,6 @@ function restartGame() {
   initGame();
 }
 
-// Handle resize
 window.addEventListener('resize', () => {
   if (game.frameId) cancelAnimationFrame(game.frameId);
   particles = [];
