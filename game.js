@@ -129,12 +129,30 @@ function addFruit(type, ratio) {
 
 function onCanvasClick(e) {
   if (game.gameOver || !game.canDrop) return;
+  // Check game over BEFORE dropping: any existing fruit above danger line?
+  const s = game.dpr;
+  const dangerY = 120 * s;
+  for (const f of game.fruits) {
+    if (f.y - f.radius < dangerY) {
+      gameOver();
+      return;
+    }
+  }
   addFruit(game.currentType, getClickRatio(e.clientX));
 }
 
 function onCanvasTouch(e) {
   e.preventDefault();
   if (game.gameOver || !game.canDrop) return;
+  // Check game over BEFORE dropping
+  const s = game.dpr;
+  const dangerY = 120 * s;
+  for (const f of game.fruits) {
+    if (f.y - f.radius < dangerY) {
+      gameOver();
+      return;
+    }
+  }
   addFruit(game.currentType, getClickRatio(e.touches[0].clientX));
 }
 
@@ -299,9 +317,10 @@ function physicsStep(dt) {
     if (mergedCollision) break; // restart i loop
   }
 
-  // --- Game over check ---
+  // --- Game over check (run every frame as fail-safe) ---
+  // Check fruits that have been interacting for a while (not freshly spawned)
   for (const f of game.fruits) {
-    if (f.settled && f.y - f.radius < dangerY) {
+    if (f.settleTimer > 0.05 && f.y - f.radius < dangerY) {
       gameOver();
       return;
     }

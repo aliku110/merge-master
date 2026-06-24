@@ -1,0 +1,21 @@
+{
+  "project_type": "minigame",
+  "projectname": "合成大师",
+  "appid": "YOUR_WECHAT_APPID",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "postcss": true,
+    "minified": true,
+    "enhance": true
+  },
+  "libVersion": "3.3.0",
+  "packOptions": {
+    "ignore": [
+      {"type": "file", "value": "server.js"},
+      {"type": "file", "value": "package.json"},
+      {"type": "file", "value": "Dockerfile"},
+      {"type": "folder", "value": ".git"}
+    ]
+  }
+}
