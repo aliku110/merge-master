@@ -1,0 +1,118 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  touch-action: none;
+  user-select: none;
+}
+
+#app {
+  background: #1a1a2e;
+  border-radius: 20px;
+  padding: 16px;
+  max-width: 420px;
+  width: 100%;
+  margin: 10px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+
+#header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+#header h1 { font-size: 1.5rem; color: #fff; }
+
+#score-board {
+  background: #16213e;
+  padding: 8px 16px;
+  border-radius: 12px;
+  text-align: center;
+}
+#score-label { font-size: 0.75rem; color: #8a8abf; display: block; }
+#score-value { font-size: 1.5rem; color: #f1c40f; font-weight: 700; }
+
+#game-container {
+  position: relative;
+  background: #16213e;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+#gameCanvas { display: block; width: 100%; cursor: pointer; }
+
+#next-fruit {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0,0,0,0.5);
+  padding: 6px 10px;
+  border-radius: 8px;
+  text-align: center;
+  color: #aaa;
+  font-size: 0.7rem;
+}
+#next-preview { font-size: 1.5rem; margin-top: 2px; }
+
+#controls {
+  display: flex;
+  gap: 8px;
+}
+#controls button {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: #16213e;
+  color: #ccc;
+  transition: 0.2s;
+}
+#controls button:hover { background: #1a1a3e; color: #fff; }
+
+/* Overlay */
+#overlay, #rules-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+}
+#modal, #rules-modal {
+  background: #1a1a2e;
+  border-radius: 20px;
+  padding: 32px;
+  text-align: center;
+  color: #fff;
+  max-width: 320px;
+  width: 90%;
+}
+#modal h2 { font-size: 1.8rem; margin-bottom: 12px; color: #e74c3c; }
+#modal-score { font-size: 2rem; color: #f1c40f; font-weight: 700; }
+#modal-highscore { color: #8a8abf; margin: 8px 0 20px; }
+#rules-modal h2 { font-size: 1.5rem; margin-bottom: 16px; color: #f1c40f; }
+#rules-modal ul { text-align: left; line-height: 2; color: #ccc; padding-left: 20px; }
+#rules-modal .tip { margin-top: 12px; color: #e67e22; font-weight: 600; }
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border: none;
+  color: #fff;
+  padding: 12px 32px;
+  border-radius: 25px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.btn-primary:hover { transform: scale(1.05); }
+
+.hidden { display: none !important; }

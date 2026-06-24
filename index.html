@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>合成大师 🍉</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <h1>🍉 合成大师</h1>
+    <div id="score-board">
+      <span id="score-label">得分</span>
+      <span id="score-value">0</span>
+    </div>
+  </div>
+  <div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+    <div id="next-fruit">
+      <span>下一个</span>
+      <div id="next-preview"></div>
+    </div>
+  </div>
+  <div id="controls">
+    <button id="btnRestart">🔄 重新开始</button>
+    <button id="btnRules">📖 规则</button>
+  </div>
+</div>
+
+<div id="overlay" class="hidden">
+  <div id="modal">
+    <h2 id="modal-title">游戏结束</h2>
+    <p id="modal-score">得分: 0</p>
+    <p id="modal-highscore">最高纪录: 0</p>
+    <button id="modal-btn" class="btn-primary">再来一局</button>
+  </div>
+</div>
+
+<div id="rules-overlay" class="hidden">
+  <div id="rules-modal">
+    <h2>🎮 游戏规则</h2>
+    <ul>
+      <li>从顶部放下水果</li>
+      <li>相同水果碰撞会合成为更高级水果</li>
+      <li>合成高级水果获得更高分数</li>
+      <li>水果堆满顶部则游戏结束</li>
+      <li>🍒→🍇→🍊→🍋→🍅→🍑→🍎→🍐→🍉</li>
+    </ul>
+    <p class="tip">合成大西瓜即最高分！</p>
+    <button id="rules-close" class="btn-primary">知道了</button>
+  </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
