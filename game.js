@@ -250,7 +250,8 @@ function physicsStep(dt) {
     }
   }
 
-  // --- Fruit-fruit collisions ---
+  // --- Merge + Collision (merge same-type first, then resolve remaining overlaps) ---
+  let mergedCollision = false;
   for (let i = 0; i < game.fruits.length; i++) {
     for (let j = i + 1; j < game.fruits.length; j++) {
       const a = game.fruits[i];
@@ -258,13 +259,20 @@ function physicsStep(dt) {
       const dx = a.x - b.x;
       const dy = a.y - b.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      const minDist = a.radius + b.radius;
 
-      if (dist >= minDist || dist === 0) continue;
+      if (dist >= (a.radius + b.radius) || dist === 0) continue;
 
+      // If same type, MERGE immediately (before collision pushes them apart)
+      if (a.type === b.type && a.type < FRUIT_TYPES.length - 1) {
+        mergeFruits(a, b);
+        mergedCollision = true;
+        break; // restart j loop since array changed
+      }
+
+      // Different types: collision resolution (push apart)
       const nx = dx / dist;
       const ny = dy / dist;
-      const overlap = minDist - dist;
+      const overlap = (a.radius + b.radius) - dist;
       const totalMass = a.mass + b.mass;
 
       // Position correction
@@ -288,28 +296,8 @@ function physicsStep(dt) {
       a.settleTimer = b.settleTimer = 0;
       a.settled = b.settled = false;
     }
+    if (mergedCollision) break; // restart i loop
   }
-
-  // --- Merge checks (repeat until no more merges in this frame) ---
-  let merged;
-  do {
-    merged = false;
-    for (let i = 0; i < game.fruits.length; i++) {
-      for (let j = i + 1; j < game.fruits.length; j++) {
-        const a = game.fruits[i];
-        const b = game.fruits[j];
-        if (a.type !== b.type) continue;
-        const dx = a.x - b.x;
-        const dy = a.y - b.y;
-        if (Math.sqrt(dx * dx + dy * dy) < (a.radius + b.radius) * 0.7) {
-          mergeFruits(a, b);
-          merged = true;
-          break; // restart j loop
-        }
-      }
-      if (merged) break; // restart i loop
-    }
-  } while (merged);
 
   // --- Game over check ---
   for (const f of game.fruits) {
